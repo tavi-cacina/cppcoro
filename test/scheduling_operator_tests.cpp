@@ -224,7 +224,7 @@ TEST_CASE_FIXTURE(io_service_fixture, "resume_on task<> pipe syntax")
 
 	cppcoro::sync_wait([&]() -> cppcoro::task<>
 	{
-		cppcoro::task<int> t = makeTask() | cppcoro::resume_on(io_service());
+		auto t = makeTask() | cppcoro::resume_on(io_service());
 		CHECK(co_await t == 123);
 		CHECK(std::this_thread::get_id() != mainThreadId);
 	}());
@@ -255,7 +255,7 @@ TEST_CASE_FIXTURE(io_service_fixture, "resume_on task<> pipe syntax multiple use
 
 		CHECK(std::this_thread::get_id() == mainThreadId);
 
-		cppcoro::task<int> t =
+		auto t =
 			makeTask()
 			| cppcoro::resume_on(io_service())
 			| cppcoro::fmap(triple)

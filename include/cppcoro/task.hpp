@@ -21,7 +21,18 @@
 
 namespace cppcoro
 {
-	template<typename T> class task;
+	enum class resume_policy
+	{
+		// The default resume policy allows to immediately resume the awaiting coroutine
+		// without increasing the stack depth. 
+		default,
+
+		// The deferred policy will not allow to resume directly the awaiting coroutine.
+		// This is used by tasks that are scheduled on a different execution context, see schedule_on
+		deferred
+	};
+
+	template<typename T, resume_policy policy> class task;
 
 	namespace detail
 	{
@@ -112,7 +123,7 @@ namespace cppcoro
 
 		};
 
-		template<typename T>
+		template<typename T, resume_policy policy>
 		class task_promise final : public task_promise_base
 		{
 		public:
@@ -127,7 +138,7 @@ namespace cppcoro
 				}
 			}
 
-			task<T> get_return_object() noexcept;
+			task<T, policy> get_return_object() noexcept;
 
 			template<
 				typename VALUE,
@@ -168,14 +179,14 @@ namespace cppcoro
 
 		};
 
-		template<>
-		class task_promise<void> : public task_promise_base
+		template<resume_policy policy>
+		class task_promise<void, policy> : public task_promise_base
 		{
 		public:
 
 			task_promise() noexcept = default;
 
-			task<void> get_return_object() noexcept;
+			task<void, policy> get_return_object() noexcept;
 
 			void return_void() noexcept
 			{}
@@ -187,14 +198,14 @@ namespace cppcoro
 
 		};
 
-		template<typename T>
-		class task_promise<T&> : public task_promise_base
+		template<typename T, resume_policy policy>
+		class task_promise<T&, policy> : public task_promise_base
 		{
 		public:
 
 			task_promise() noexcept = default;
 
-			task<T&> get_return_object() noexcept;
+			task<T&, policy> get_return_object() noexcept;
 
 			void return_value(T& value) noexcept
 			{
@@ -222,12 +233,12 @@ namespace cppcoro
 	/// simply captures any passed parameters and returns exeuction to the
 	/// caller. Execution of the coroutine body does not start until the
 	/// coroutine is first co_await'ed.
-	template<typename T = void>
+	template<typename T = void, resume_policy policy = resume_policy::default >
 	class task
 	{
 	public:
 
-		using promise_type = detail::task_promise<T>;
+		using promise_type = detail::task_promise<T, policy>;
 
 		using value_type = T;
 
@@ -264,8 +275,15 @@ namespace cppcoro
 				// coroutine_handle-returning await_suspend() on both MSVC and Clang
 				// as this will provide ability to suspend the awaiting coroutine and
 				// resume another coroutine with a guaranteed tail-call to resume().
-				m_coroutine.resume();
-				return m_coroutine.promise().try_set_continuation(detail::continuation{ awaiter });
+				if(policy == resume_policy::default) {
+					m_coroutine.resume();
+					return m_coroutine.promise().try_set_continuation(detail::continuation{ awaiter });
+				}
+				else if(policy == resume_policy::deferred) {
+					m_coroutine.promise().try_set_continuation(detail::continuation{ awaiter });
+					m_coroutine.resume();
+					return true;
+				}
 			}
 		};
 
@@ -416,24 +434,25 @@ namespace cppcoro
 		std::experimental::coroutine_handle<promise_type> m_coroutine;
 
 	};
-
+   
 	namespace detail
 	{
-		template<typename T>
-		task<T> task_promise<T>::get_return_object() noexcept
+		template<typename T, resume_policy policy>
+		task<T, policy> task_promise<T, policy>::get_return_object() noexcept
 		{
-			return task<T>{ std::experimental::coroutine_handle<task_promise>::from_promise(*this) };
+			return task<T, policy>{ std::experimental::coroutine_handle<task_promise>::from_promise(*this) };
 		}
 
-		inline task<void> task_promise<void>::get_return_object() noexcept
+    template<resume_policy policy>
+		inline task<void, policy> task_promise<void, policy>::get_return_object() noexcept
 		{
-			return task<void>{ std::experimental::coroutine_handle<task_promise>::from_promise(*this) };
+			return task<void, policy>{ std::experimental::coroutine_handle<task_promise>::from_promise(*this) };
 		}
 
-		template<typename T>
-		task<T&> task_promise<T&>::get_return_object() noexcept
+		template<typename T, resume_policy policy>
+		task<T&, policy> task_promise<T&, policy>::get_return_object() noexcept
 		{
-			return task<T&>{ std::experimental::coroutine_handle<task_promise>::from_promise(*this) };
+			return task<T&, policy>{ std::experimental::coroutine_handle<task_promise>::from_promise(*this) };
 		}
 	}
 
@@ -461,6 +480,30 @@ namespace cppcoro
 		co_await t;
 		co_return std::invoke(std::move(func));
 	}
+
+	template<typename FUNC, typename T>
+	task<std::result_of_t<FUNC&&(T&&)>, resume_policy::deferred> fmap(FUNC func, task<T, resume_policy::deferred> t)
+	{
+		static_assert(
+			!std::is_reference_v<FUNC>,
+			"Passing by reference to task<T> coroutine is unsafe. "
+			"Use std::ref or std::cref to explicitly pass by reference.");
+
+		co_return std::invoke(std::move(func), co_await std::move(t));
+	}
+
+	template<typename FUNC>
+	task<std::result_of_t<FUNC&&()>, resume_policy::deferred> fmap(FUNC func, task<void, resume_policy::deferred> t)
+	{
+		static_assert(
+			!std::is_reference_v<FUNC>,
+			"Passing by reference to task<T> coroutine is unsafe. "
+			"Use std::ref or std::cref to explicitly pass by reference.");
+
+		co_await t;
+		co_return std::invoke(std::move(func));
+	}
+
 }
 
 #endif

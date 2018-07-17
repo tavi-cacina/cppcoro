@@ -33,8 +33,8 @@ namespace cppcoro
 		return schedule_on(transform.scheduler, std::forward<T>(value));
 	}
 
-	template<typename T, typename SCHEDULER>
-	task<T> schedule_on(SCHEDULER& scheduler, task<T> task)
+	template<typename T, typename SCHEDULER, resume_policy policy>
+	task<T, resume_policy::deferred> schedule_on(SCHEDULER& scheduler, task<T, policy> task)
 	{
 		co_await scheduler.schedule();
 		co_return co_await std::move(task);
