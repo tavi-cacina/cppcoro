@@ -11,16 +11,13 @@
 #include <cppcoro/when_all.hpp>
 #include <cppcoro/when_all_ready.hpp>
 #include <cppcoro/on_scope_exit.hpp>
-
-#ifdef CPPCORO_IO_ENABLED
-# include <cppcoro/io_service.hpp>
-# include "io_service_fixture.hpp"
-#endif
+#include <cppcoro/static_thread_pool.hpp>
 
 #include <thread>
 #include <cassert>
 #include <vector>
 
+#include <ostream>
 #include "doctest/doctest.h"
 
 TEST_SUITE_BEGIN("async_auto_reset_event");
@@ -90,10 +87,10 @@ TEST_CASE("multiple waiters")
 		check()));
 }
 
-#ifdef CPPCORO_IO_ENABLED
-
-TEST_CASE_FIXTURE(io_service_fixture_with_threads<3>, "multi-threaded")
+TEST_CASE("multi-threaded")
 {
+	cppcoro::static_thread_pool tp{ 3 };
+
 	auto run = [&]() -> cppcoro::task<>
 	{
 		cppcoro::async_auto_reset_event event;
@@ -102,7 +99,7 @@ TEST_CASE_FIXTURE(io_service_fixture_with_threads<3>, "multi-threaded")
 
 		auto startWaiter = [&]() -> cppcoro::task<>
 		{
-			co_await io_service().schedule();
+			co_await tp.schedule();
 			co_await event;
 			++value;
 			event.set();
@@ -110,7 +107,7 @@ TEST_CASE_FIXTURE(io_service_fixture_with_threads<3>, "multi-threaded")
 
 		auto startSignaller = [&]() -> cppcoro::task<>
 		{
-			co_await io_service().schedule();
+			co_await tp.schedule();
 			value = 5;
 			event.set();
 		};
@@ -139,7 +136,5 @@ TEST_CASE_FIXTURE(io_service_fixture_with_threads<3>, "multi-threaded")
 
 	cppcoro::sync_wait(cppcoro::when_all(std::move(tasks)));
 }
-
-#endif
 
 TEST_SUITE_END();

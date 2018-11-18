@@ -6,16 +6,17 @@
 #define CPPCORO_TASK_HPP_INCLUDED
 
 #include <cppcoro/config.hpp>
+#include <cppcoro/awaitable_traits.hpp>
 #include <cppcoro/broken_promise.hpp>
-#include <cppcoro/fmap.hpp>
 
-#include <cppcoro/detail/continuation.hpp>
+#include <cppcoro/detail/remove_rvalue_reference.hpp>
 
 #include <atomic>
 #include <exception>
 #include <utility>
 #include <type_traits>
 #include <cstdint>
+#include <cassert>
 
 #include <experimental/coroutine>
 
@@ -33,7 +34,21 @@ namespace cppcoro
 			{
 				bool await_ready() const noexcept { return false; }
 
+#if CPPCORO_COMPILER_SUPPORTS_SYMMETRIC_TRANSFER
 				template<typename PROMISE>
+				std::experimental::coroutine_handle<> await_suspend(
+					std::experimental::coroutine_handle<PROMISE> coro) noexcept
+				{
+					return coro.promise().m_continuation;
+				}
+#else
+				// HACK: Need to add CPPCORO_NOINLINE to await_suspend() method
+				// to avoid MSVC 2017.8 from spilling some local variables in
+				// await_suspend() onto the coroutine frame in some cases.
+				// Without this, some tests in async_auto_reset_event_tests.cpp
+				// were crashing under x86 optimised builds.
+				template<typename PROMISE>
+				CPPCORO_NOINLINE
 				void await_suspend(std::experimental::coroutine_handle<PROMISE> coroutine)
 				{
 					task_promise_base& promise = coroutine.promise();
@@ -49,6 +64,7 @@ namespace cppcoro
 						promise.m_continuation.resume();
 					}
 				}
+#endif
 
 				void await_resume() noexcept {}
 			};
@@ -56,7 +72,9 @@ namespace cppcoro
 		public:
 
 			task_promise_base() noexcept
+#if !CPPCORO_COMPILER_SUPPORTS_SYMMETRIC_TRANSFER
 				: m_state(false)
+#endif
 			{}
 
 			auto initial_suspend() noexcept
@@ -69,46 +87,29 @@ namespace cppcoro
 				return final_awaitable{};
 			}
 
-			void unhandled_exception() noexcept
+#if CPPCORO_COMPILER_SUPPORTS_SYMMETRIC_TRANSFER
+			void set_continuation(std::experimental::coroutine_handle<> continuation) noexcept
 			{
-				m_exception = std::current_exception();
+				m_continuation = continuation;
 			}
-
-			bool try_set_continuation(continuation c)
+#else
+			bool try_set_continuation(std::experimental::coroutine_handle<> continuation)
 			{
-				m_continuation = c;
+				m_continuation = continuation;
 				return !m_state.exchange(true, std::memory_order_acq_rel);
 			}
-
-		protected:
-
-			bool completed() const noexcept
-			{
-				return m_state.load(std::memory_order_relaxed);
-			}
-
-			bool completed_with_unhandled_exception()
-			{
-				return m_exception != nullptr;
-			}
-
-			void rethrow_if_unhandled_exception()
-			{
-				if (m_exception != nullptr)
-				{
-					std::rethrow_exception(m_exception);
-				}
-			}
+#endif
 
 		private:
 
-			continuation m_continuation;
-			std::exception_ptr m_exception;
+			std::experimental::coroutine_handle<> m_continuation;
 
+#if !CPPCORO_COMPILER_SUPPORTS_SYMMETRIC_TRANSFER
 			// Initially false. Set to true when either a continuation is registered
 			// or when the coroutine has run to completion. Whichever operation
 			// successfully transitions from false->true got there first.
 			std::atomic<bool> m_state;
+#endif
 
 		};
 
@@ -117,17 +118,31 @@ namespace cppcoro
 		{
 		public:
 
-			task_promise() noexcept = default;
+			task_promise() noexcept {}
 
 			~task_promise()
 			{
-				if (completed() && !completed_with_unhandled_exception())
+				switch (m_resultType)
 				{
-					reinterpret_cast<T*>(&m_valueStorage)->~T();
+				case result_type::value:
+					m_value.~T();
+					break;
+				case result_type::exception:
+					m_exception.~exception_ptr();
+					break;
+				default:
+					break;
 				}
 			}
 
 			task<T> get_return_object() noexcept;
+
+			void unhandled_exception() noexcept
+			{
+				::new (static_cast<void*>(std::addressof(m_exception))) std::exception_ptr(
+					std::current_exception());
+				m_resultType = result_type::exception;
+			}
 
 			template<
 				typename VALUE,
@@ -135,36 +150,56 @@ namespace cppcoro
 			void return_value(VALUE&& value)
 				noexcept(std::is_nothrow_constructible_v<T, VALUE&&>)
 			{
-				new (&m_valueStorage) T(std::forward<VALUE>(value));
+				::new (static_cast<void*>(std::addressof(m_value))) T(std::forward<VALUE>(value));
+				m_resultType = result_type::value;
 			}
 
 			T& result() &
 			{
-				rethrow_if_unhandled_exception();
-				return *reinterpret_cast<T*>(&m_valueStorage);
+				if (m_resultType == result_type::exception)
+				{
+					std::rethrow_exception(m_exception);
+				}
+
+				assert(m_resultType == result_type::value);
+
+				return m_value;
 			}
 
-			T&& result() &&
+			// HACK: Need to have co_await of task<int> return prvalue rather than
+			// rvalue-reference to work around an issue with MSVC where returning
+			// rvalue reference of a fundamental type from await_resume() will
+			// cause the value to be copied to a temporary. This breaks the
+			// sync_wait() implementation.
+			// See https://github.com/lewissbaker/cppcoro/issues/40#issuecomment-326864107
+			using rvalue_type = std::conditional_t<
+				std::is_arithmetic_v<T> || std::is_pointer_v<T>,
+				T,
+				T&&>;
+
+			rvalue_type result() &&
 			{
-				rethrow_if_unhandled_exception();
-				return std::move(*reinterpret_cast<T*>(&m_valueStorage));
+				if (m_resultType == result_type::exception)
+				{
+					std::rethrow_exception(m_exception);
+				}
+
+				assert(m_resultType == result_type::value);
+
+				return std::move(m_value);
 			}
 
 		private:
 
-#if CPPCORO_COMPILER_MSVC
-# pragma warning(push)
-# pragma warning(disable : 4324) // structure was padded due to alignment.
-#endif
+			enum class result_type { empty, value, exception };
 
-			// Not using std::aligned_storage here due to bug in MSVC 2015 Update 2
-			// that means it doesn't work for types with alignof(T) > 8.
-			// See MS-Connect bug #2658635.
-			alignas(T) char m_valueStorage[sizeof(T)];
+			result_type m_resultType = result_type::empty;
 
-#if CPPCORO_COMPILER_MSVC
-# pragma warning(pop)
-#endif
+			union
+			{
+				T m_value;
+				std::exception_ptr m_exception;
+			};
 
 		};
 
@@ -180,10 +215,22 @@ namespace cppcoro
 			void return_void() noexcept
 			{}
 
+			void unhandled_exception() noexcept
+			{
+				m_exception = std::current_exception();
+			}
+
 			void result()
 			{
-				rethrow_if_unhandled_exception();
+				if (m_exception)
+				{
+					std::rethrow_exception(m_exception);
+				}
 			}
+
+		private:
+
+			std::exception_ptr m_exception;
 
 		};
 
@@ -196,6 +243,11 @@ namespace cppcoro
 
 			task<T&> get_return_object() noexcept;
 
+			void unhandled_exception() noexcept
+			{
+				m_exception = std::current_exception();
+			}
+
 			void return_value(T& value) noexcept
 			{
 				m_value = std::addressof(value);
@@ -203,13 +255,18 @@ namespace cppcoro
 
 			T& result()
 			{
-				rethrow_if_unhandled_exception();
+				if (m_exception)
+				{
+					std::rethrow_exception(m_exception);
+				}
+
 				return *m_value;
 			}
 
 		private:
 
-			T* m_value;
+			T* m_value = nullptr;
+			std::exception_ptr m_exception;
 
 		};
 	}
@@ -246,7 +303,15 @@ namespace cppcoro
 				return !m_coroutine || m_coroutine.done();
 			}
 
-			bool await_suspend(std::experimental::coroutine_handle<> awaiter) noexcept
+#if CPPCORO_COMPILER_SUPPORTS_SYMMETRIC_TRANSFER
+			std::experimental::coroutine_handle<> await_suspend(
+				std::experimental::coroutine_handle<> awaitingCoroutine) noexcept
+			{
+				m_coroutine.promise().set_continuation(awaitingCoroutine);
+				return m_coroutine;
+			}
+#else
+			bool await_suspend(std::experimental::coroutine_handle<> awaitingCoroutine) noexcept
 			{
 				// NOTE: We are using the bool-returning version of await_suspend() here
 				// to work around a potential stack-overflow issue if a coroutine
@@ -265,8 +330,9 @@ namespace cppcoro
 				// as this will provide ability to suspend the awaiting coroutine and
 				// resume another coroutine with a guaranteed tail-call to resume().
 				m_coroutine.resume();
-				return m_coroutine.promise().try_set_continuation(detail::continuation{ awaiter });
+				return m_coroutine.promise().try_set_continuation(awaitingCoroutine);
 			}
+#endif
 		};
 
 	public:
@@ -378,39 +444,6 @@ namespace cppcoro
 			return awaitable{ m_coroutine };
 		}
 
-		// Internal helper method for when_all() implementation.
-		auto get_starter() const noexcept
-		{
-			class starter
-			{
-			public:
-
-				starter(std::experimental::coroutine_handle<promise_type> coroutine) noexcept
-					: m_coroutine(coroutine)
-				{}
-
-				void start(detail::continuation continuation) noexcept
-				{
-					if (m_coroutine && !m_coroutine.done())
-					{
-						m_coroutine.resume();
-						if (m_coroutine.promise().try_set_continuation(continuation))
-						{
-							return;
-						}
-					}
-
-					continuation.resume();
-				}
-
-			private:
-
-				std::experimental::coroutine_handle<promise_type> m_coroutine;
-			};
-
-			return starter{ m_coroutine };
-		}
-
 	private:
 
 		std::experimental::coroutine_handle<promise_type> m_coroutine;
@@ -437,29 +470,11 @@ namespace cppcoro
 		}
 	}
 
-	// fmap() overloads for task<T>
-
-	template<typename FUNC, typename T>
-	task<std::result_of_t<FUNC&&(T&&)>> fmap(FUNC func, task<T> t)
+	template<typename AWAITABLE>
+	auto make_task(AWAITABLE awaitable)
+		-> task<detail::remove_rvalue_reference_t<typename awaitable_traits<AWAITABLE>::await_result_t>>
 	{
-		static_assert(
-			!std::is_reference_v<FUNC>,
-			"Passing by reference to task<T> coroutine is unsafe. "
-			"Use std::ref or std::cref to explicitly pass by reference.");
-
-		co_return std::invoke(std::move(func), co_await std::move(t));
-	}
-
-	template<typename FUNC>
-	task<std::result_of_t<FUNC&&()>> fmap(FUNC func, task<> t)
-	{
-		static_assert(
-			!std::is_reference_v<FUNC>,
-			"Passing by reference to task<T> coroutine is unsafe. "
-			"Use std::ref or std::cref to explicitly pass by reference.");
-
-		co_await t;
-		co_return std::invoke(std::move(func));
+		co_return co_await static_cast<AWAITABLE&&>(awaitable);
 	}
 }
 

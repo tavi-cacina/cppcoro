@@ -8,6 +8,7 @@
 #include <experimental/coroutine>
 #include <type_traits>
 #include <utility>
+#include <exception>
 
 namespace cppcoro
 {
@@ -49,11 +50,13 @@ namespace cppcoro
 
 			void unhandled_exception()
 			{
-				std::rethrow_exception(std::current_exception());
+				m_value = nullptr;
+				m_exception = std::current_exception();
 			}
 
 			void return_void()
 			{
+				m_value = nullptr;
 			}
 
 			reference_type value() const noexcept
@@ -65,9 +68,18 @@ namespace cppcoro
 			template<typename U>
 			std::experimental::suspend_never await_transform(U&& value) = delete;
 
+			void rethrow_if_exception()
+			{
+				if (m_exception)
+				{
+					std::rethrow_exception(m_exception);
+				}
+			}
+
 		private:
 
 			pointer_type m_value;
+			std::exception_ptr m_exception;
 
 		};
 
@@ -85,6 +97,11 @@ namespace cppcoro
 			using reference = value_type&;
 			using pointer = value_type*;
 
+			// Iterator needs to be default-constructible to satisfy the Range concept.
+			generator_iterator() noexcept
+				: m_coroutine(nullptr)
+			{}
+			
 			explicit generator_iterator(std::nullptr_t) noexcept
 				: m_coroutine(nullptr)
 			{}
@@ -108,17 +125,17 @@ namespace cppcoro
 				m_coroutine.resume();
 				if (m_coroutine.done())
 				{
-					m_coroutine = nullptr;
+					std::exchange(m_coroutine, {}).promise().rethrow_if_exception();
 				}
 
 				return *this;
 			}
 
-			// Don't support post-increment as that would require taking a
-			// copy of the old value into the returned iterator as there
-			// are no guarantees it's still going to be valid after the
-			// increment is executed.
-			generator_iterator operator++(int) = delete;
+			// Need to provide post-increment operator to implement the 'Range' concept.
+			void operator++(int)
+			{
+				(void)operator++();
+			}
 
 			reference operator*() const noexcept
 			{
@@ -179,6 +196,8 @@ namespace cppcoro
 				{
 					return iterator{ m_coroutine };
 				}
+
+				m_coroutine.promise().rethrow_if_exception();
 			}
 
 			return iterator{ nullptr };
