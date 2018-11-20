@@ -21,11 +21,14 @@ configure_file (
   )
 
 set(cppcoro_includes
+  include/cppcoro/awaitable_traits.hpp
+  include/cppcoro/is_awaitable.hpp
   include/cppcoro/async_auto_reset_event.hpp
   include/cppcoro/async_manual_reset_event.hpp
   include/cppcoro/async_generator.hpp
   include/cppcoro/async_mutex.hpp
   include/cppcoro/async_latch.hpp
+  include/cppcoro/async_scope.hpp
   include/cppcoro/broken_promise.hpp
   include/cppcoro/cancellation_registration.hpp
   include/cppcoro/cancellation_source.hpp
@@ -46,16 +49,25 @@ set(cppcoro_includes
   include/cppcoro/schedule_on.hpp
   include/cppcoro/generator.hpp
   include/cppcoro/recursive_generator.hpp
+  include/cppcoro/static_thread_pool.hpp
 
   # detailIncludes
-  include/cppcoro/detail/continuation.hpp
-  include/cppcoro/detail/when_all_awaitable.hpp
+  include/cppcoro/detail/void_value.hpp
+  include/cppcoro/detail/when_all_ready_awaitable.hpp
+  include/cppcoro/detail/when_all_counter.hpp
+  include/cppcoro/detail/when_all_task.hpp
+  include/cppcoro/detail/get_awaiter.hpp
+  include/cppcoro/detail/is_awaiter.hpp
+  include/cppcoro/detail/any.hpp
+  include/cppcoro/detail/sync_wait_task.hpp
   include/cppcoro/detail/unwrap_reference.hpp
   include/cppcoro/detail/lightweight_manual_reset_event.hpp
 
   # privateHeaders
   lib/cancellation_state.hpp
-
+  lib/auto_reset_event.hpp
+  lib/spin_wait.hpp
+  lib/spin_mutex.hpp
   )
 
 set(cppcoro_ioIncludes
@@ -89,6 +101,10 @@ set(cppcoro_sources
   lib/cancellation_source.cpp
   lib/cancellation_registration.cpp
   lib/lightweight_manual_reset_event.cpp
+  lib/static_thread_pool.cpp
+  lib/auto_reset_event.cpp
+  lib/spin_wait.cpp
+  lib/spin_mutex.cpp
   )
 
 set(cppcoro_ioSources
