@@ -60,6 +60,74 @@ TEST_CASE("generator of reference returns by reference")
 	CHECK(value == 2.0f);
 }
 
+TEST_CASE("generator of const type")
+{
+	auto fib = []() -> generator<const std::uint64_t>
+	{
+		std::uint64_t a = 0, b = 1;
+		while (true)
+		{
+			co_yield b;
+			b += std::exchange(a, b);
+		}
+	};
+
+	std::uint64_t count = 0;
+	for (auto i : fib())
+	{
+		if (i > 1'000'000) {
+			break;
+		}
+		++count;
+	}
+
+	// 30th fib number is 832'040
+	CHECK(count == 30);
+}
+
+TEST_CASE("value-category of fmap() matches reference type")
+{
+    using cppcoro::fmap;
+
+    auto checkIsRvalue = [](auto&& x) {
+        static_assert(std::is_rvalue_reference_v<decltype(x)>);
+        static_assert(!std::is_const_v<std::remove_reference_t<decltype(x)>>);
+        CHECK(x == 123);
+        return x;
+    };
+    auto checkIsLvalue = [](auto&& x) {
+        static_assert(std::is_lvalue_reference_v<decltype(x)>);
+        static_assert(!std::is_const_v<std::remove_reference_t<decltype(x)>>);
+        CHECK(x == 123);
+        return x;
+    };
+    auto checkIsConstLvalue = [](auto&& x) {
+        static_assert(std::is_lvalue_reference_v<decltype(x)>);
+        static_assert(std::is_const_v<std::remove_reference_t<decltype(x)>>);
+        CHECK(x == 123);
+        return x;
+    };
+    auto checkIsConstRvalue = [](auto&& x) {
+        static_assert(std::is_rvalue_reference_v<decltype(x)>);
+        static_assert(std::is_const_v<std::remove_reference_t<decltype(x)>>);
+        CHECK(x == 123);
+        return x;
+    };
+
+    auto consume = [](auto&& range) {
+        for (auto&& x : range) {
+            (void)x;
+        }
+    };
+
+    consume([]() -> generator<int> { co_yield 123; }() | fmap(checkIsLvalue));
+    consume([]() -> generator<const int> { co_yield 123; }() | fmap(checkIsConstLvalue));
+    consume([]() -> generator<int&> { co_yield 123; }() | fmap(checkIsLvalue));
+    consume([]() -> generator<const int&> { co_yield 123; }() | fmap(checkIsConstLvalue));
+    consume([]() -> generator<int&&> { co_yield 123; }() | fmap(checkIsRvalue));
+    consume([]() -> generator<const int&&> { co_yield 123; }() | fmap(checkIsConstRvalue));
+}
+
 TEST_CASE("generator doesn't start until its called")
 {
 	bool reachedA = false;

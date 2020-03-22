@@ -4,47 +4,49 @@ The 'cppcoro' library provides a set of general-purpose primitives for making us
 
 These include:
 * Coroutine Types
-  * `task<T>`
-  * `shared_task<T>`
-  * `generator<T>`
-  * `recursive_generator<T>`
-  * `async_generator<T>`
+  * [`task<T>`](#taskt)
+  * [`shared_task<T>`](#shared_taskt)
+  * [`generator<T>`](#generatort)
+  * [`recursive_generator<T>`](#recursive_generatort)
+  * [`async_generator<T>`](#async_generatort)
 * Awaitable Types
-  * `single_consumer_event`
-  * `single_consumer_auto_reset_event`
-  * `async_mutex`
-  * `async_manual_reset_event`
-  * `async_auto_reset_event`
-  * `async_latch`
+  * [`single_consumer_event`](#single_consumer_event)
+  * [`single_consumer_async_auto_reset_event`](#single_consumer_async_auto_reset_event)
+  * [`async_mutex`](#async_mutex)
+  * [`async_manual_reset_event`](#async_manual_reset_event)
+  * [`async_auto_reset_event`](#async_auto_reset_event)
+  * [`async_latch`](#async_latch)
+  * [`sequence_barrier`](#sequence_barrier)
+  * [`multi_producer_sequencer`](#multi_producer_sequencer)
+  * [`single_producer_sequencer`](#single_producer_sequencer)
 * Functions
-  * `sync_wait()`
-  * `when_all()`
-  * `when_all_ready()`
-  * `fmap()`
-  * `schedule_on()`
-  * `resume_on()`
-* Cancellation
+  * [`sync_wait()`](#sync_wait)
+  * [`when_all()`](#when_all)
+  * [`when_all_ready()`](#when_all_ready)
+  * [`fmap()`](#fmap)
+  * [`schedule_on()`](#schedule_on)
+  * [`resume_on()`](#resume_on)
+* [Cancellation](#Cancellation)
   * `cancellation_token`
   * `cancellation_source`
   * `cancellation_registration`
 * Schedulers and I/O
-  * `static_thread_pool`
-  * `io_service`
-  * `io_work_scope`
-  * `file`, `readable_file`, `writable_file`
-  * `read_only_file`, `write_only_file`, `read_write_file`
-Networking
-  * `socket`
-  * `ip_address`, `ipv4_address`, `ipv6_address`
-  * `ip_endpoint`, `ipv4_endpoint`, `ipv6_endpoint`
+  * [`static_thread_pool`](#static_thread_pool)
+  * [`io_service` and `io_work_scope`](#io_service-and-io_work_scope)
+  * [`file`, `readable_file`, `writable_file`](#file-readable_file-writable_file)
+  * [`read_only_file`, `write_only_file`, `read_write_file`](#read_only_file-write_only_file-read_write_file)
+* Networking
+  * [`socket`](#socket)
+  * [`ip_address`, `ipv4_address`, `ipv6_address`](#ip_address-ipv4_address-ipv6_address)
+  * [`ip_endpoint`, `ipv4_endpoint`, `ipv6_endpoint`](#ip_endpoint-ipv4_endpoint-ipv6_endpoint)
 * Metafunctions
-  * `is_awaitable<T>`
-  * `awaitable_traits<T>`
+  * [`is_awaitable<T>`](#is_awaitablet)
+  * [`awaitable_traits<T>`](#awaitable_traitst)
 * Concepts
-  * `Awaitable<T>`
-  * `Awaiter<T>`
-  * `Scheduler`
-  * `DelayedScheduler`
+  * [`Awaitable<T>`](#Awaitablet-concept)
+  * [`Awaiter<T>`](#Awaitert-concept)
+  * [`Scheduler`](#Scheduler-concept)
+  * [`DelayedScheduler`](#DelayedScheduler-concept)
 
 This library is an experimental library that is exploring the space of high-performance,
 scalable asynchronous programming abstractions that can be built on top of the C++ coroutines
@@ -86,7 +88,7 @@ cppcoro::task<int> count_lines(std::string path)
     lineCount += std::count(buffer, buffer + bytesRead, '\n');
     offset += bytesRead;
   } while (bytesRead > 0);
-  
+
   co_return lineCount;
 }
 
@@ -95,9 +97,9 @@ cppcoro::task<> usage_example()
   // Calling function creates a new task but doesn't start
   // executing the coroutine yet.
   cppcoro::task<int> countTask = count_lines("foo.txt");
-  
+
   // ...
-  
+
   // Coroutine is only started when we later co_await the task.
   int lineCount = co_await countTask;
 
@@ -143,10 +145,10 @@ namespace cppcoro
     // coroutine until the task completes.
     //
     // The 'co_await t.when_ready()' expression differs from 'co_await t' in
-    // that when_ready() only performs synchronisation, it does not return
+    // that when_ready() only performs synchronization, it does not return
     // the result or rethrow the exception.
     //
-    // This can be useful if you want to synchronise with the task without
+    // This can be useful if you want to synchronize with the task without
     // the possibility of it throwing an exception.
     Awaitable<void> when_ready() const noexcept;
   };
@@ -255,7 +257,7 @@ namespace cppcoro
     // is available.
     //
     // The result is not returned from the co_await expression.
-    // This can be used to synchronise with the task without the
+    // This can be used to synchronize with the task without the
     // possibility of the co_await expression throwing an exception.
     Awaiter<void> when_ready() const noexcept;
 
@@ -278,7 +280,7 @@ namespace cppcoro
 }
 ```
 
-All const-methods on `shared_task<T>` are safe to call concurrently with other 
+All const-methods on `shared_task<T>` are safe to call concurrently with other
 const-methods on the same instance from multiple threads. It is not safe to call
 non-const methods of `shared_task<T>` concurrently with any other method on the
 same instance of a `shared_task<T>`.
@@ -384,7 +386,7 @@ namespace cppcoro
 
         generator(generator&& other) noexcept;
         generator& operator=(generator&& other) noexcept;
-        
+
         generator(const generator& other) = delete;
         generator& operator=(const generator&) = delete;
 
@@ -425,7 +427,7 @@ of the current coroutine will resume execution to produce the next element.
 
 The benefit of `recursive_generator<T>` over `generator<T>` for iterating over recursive data-structures is that the `iterator::operator++()`
 is able to directly resume the leaf-most coroutine to produce the next element, rather than having to resume/suspend O(depth) coroutines for each element.
-The down-side is that there is additional overhead 
+The down-side is that there is additional overhead
 
 For example:
 ```c++
@@ -496,7 +498,7 @@ namespace cppcoro
       using value_type = std::remove_reference_t<T>;
       using reference = value_type&;
       using pointer = value_type*;
-      
+
       iterator(const iterator& other) noexcept;
       iterator& operator=(const iterator& other) noexcept;
 
@@ -567,7 +569,7 @@ consumer coroutine is executing a `co_await` expression waiting for the next ite
 
 This is a simple manual-reset event type that supports only a single
 coroutine awaiting it at a time.
-This can be used to 
+This can be used to
 
 API Summary:
 ```c++
@@ -614,7 +616,7 @@ void producer()
 
 ## `single_consumer_async_auto_reset_event`
 
-This class provides an async synchronisation primitive that allows a single coroutine to
+This class provides an async synchronization primitive that allows a single coroutine to
 wait until the event is signalled by a call to the `set()` method.
 
 Once the coroutine that is awaiting the event is released by either a prior or subsequent call to `set()`
@@ -761,7 +763,7 @@ cppcoro::task<> add_item(std::string value)
 
 ## `async_manual_reset_event`
 
-A manual-reset event is a coroutine/thread-synchronisation primitive that allows one or more threads
+A manual-reset event is a coroutine/thread-synchronization primitive that allows one or more threads
 to wait until the event is signalled by a thread that calls `set()`.
 
 The event is in one of two states; *'set'* and *'not set'*.
@@ -842,7 +844,7 @@ namespace cppcoro
 
 ## `async_auto_reset_event`
 
-An auto-reset event is a coroutine/thread-synchronisation primitive that allows one or more threads
+An auto-reset event is a coroutine/thread-synchronization primitive that allows one or more threads
 to wait until the event is signalled by a thread by calling `set()`.
 
 Once a coroutine that is awaiting the event is released by either a prior or subsequent call to `set()`
@@ -911,7 +913,7 @@ namespace cppcoro
 
 ## `async_latch`
 
-An async latch is a synchronisation primitive that allows coroutines to asynchronously
+An async latch is a synchronization primitive that allows coroutines to asynchronously
 wait until a counter has been decremented to zero.
 
 The latch is a single-use object. Once the counter reaches zero the latch becomes 'ready'
@@ -949,7 +951,263 @@ namespace cppcoro
 }
 ```
 
-## `cancellation_token`
+## `sequence_barrier`
+
+A `sequence_barrier` is a synchronization primitive that allows a single-producer
+and multiple consumers to coordinate with respect to a monotonically increasing
+sequence number.
+
+A single producer advances the sequence number by publishing new sequence numbers
+in a monotonically increasing order. One or more consumers can query the last
+published sequence number and can wait until a particular sequence number has been
+published.
+
+A sequence barrier can be used to represent a cursor into a thread-safe producer/consumer
+ring-buffer
+
+See the LMAX Disruptor pattern for more background:
+https://lmax-exchange.github.io/disruptor/files/Disruptor-1.0.pdf
+
+API Synopsis:
+```c++
+namespace cppcoro
+{
+  template<typename SEQUENCE = std::size_t,
+           typename TRAITS = sequence_traits<SEQUENCE>>
+  class sequence_barrier
+  {
+  public:
+    sequence_barrier(SEQUENCE initialSequence = TRAITS::initial_sequence) noexcept;
+	~sequence_barrier();
+
+	SEQUENCE last_published() const noexcept;
+
+	// Wait until the specified targetSequence number has been published.
+	//
+	// If the operation does not complete synchronously then the awaiting
+	// coroutine is resumed on the specified scheduler. Otherwise, the
+	// coroutine continues without suspending.
+	//
+	// The co_await expression resumes with the updated last_published()
+	// value, which is guaranteed to be at least 'targetSequence'.
+	template<typename SCHEDULER>
+	[[nodiscard]]
+	Awaitable<SEQUENCE> wait_until_published(SEQUENCE targetSequence,
+                                             SCHEDULER& scheduler) const noexcept;
+
+    void publish(SEQUENCE sequence) noexcept;
+  };
+}
+```
+
+## `single_producer_sequencer`
+
+A `single_producer_sequencer` is a synchronization primitive that can be used to
+coordinate access to a ring-buffer for a single producer and one or more consumers.
+
+A producer first acquires one or more slots in a ring-buffer, writes to the ring-buffer
+elements corresponding to those slots, and then finally publishes the values written to
+those slots. A producer can never produce more than 'bufferSize' elements in advance
+of where the consumer has consumed up to.
+
+A consumer then waits for certain elements to be published, processes the items and
+then notifies the producer when it has finished processing items by publishing the
+sequence number it has finished consuming in a `sequence_barrier` object.
+
+
+API Synopsis:
+```c++
+// <cppcoro/single_producer_sequencer.hpp>
+namespace cppcoro
+{
+  template<
+    typename SEQUENCE = std::size_t,
+    typename TRAITS = sequence_traits<SEQUENCE>>
+  class single_producer_sequencer
+  {
+  public:
+    using size_type = typename sequence_range<SEQUENCE, TRAITS>::size_type;
+
+    single_producer_sequencer(
+      const sequence_barrier<SEQUENCE, TRAITS>& consumerBarrier,
+      std::size_t bufferSize,
+      SEQUENCE initialSequence = TRAITS::initial_sequence) noexcept;
+
+    // Publisher API:
+
+    template<typename SCHEDULER>
+    [[nodiscard]]
+    Awaitable<SEQUENCE> claim_one(SCHEDULER& scheduler) noexcept;
+
+    template<typename SCHEDULER>
+    [[nodiscard]]
+    Awaitable<sequence_range<SEQUENCE>> claim_up_to(
+      std::size_t count,
+      SCHEDULER& scheduler) noexcept;
+
+    void publish(SEQUENCE sequence) noexcept;
+
+    // Consumer API:
+
+    SEQUENCE last_published() const noexcept;
+
+    template<typename SCHEDULER>
+    [[nodiscard]]
+    Awaitable<SEQUENCE> wait_until_published(
+      SEQUENCE targetSequence,
+      SCHEDULER& scheduler) const noexcept;
+
+  };
+}
+```
+
+Example usage:
+```c++
+using namespace cppcoro;
+using namespace std::chrono;
+
+struct message
+{
+  int id;
+  steady_clock::time_point timestamp;
+  float data;
+};
+
+constexpr size_t bufferSize = 16384; // Must be power-of-two
+constexpr size_t indexMask = bufferSize - 1;
+message buffer[bufferSize];
+
+task<void> producer(
+  io_service& ioSvc,
+  single_producer_sequencer<size_t>& sequencer)
+{
+  auto start = steady_clock::now();
+  for (int i = 0; i < 1'000'000; ++i)
+  {
+    // Wait until a slot is free in the buffer.
+    size_t seq = co_await sequencer.claim_one(ioSvc);
+
+    // Populate the message.
+    auto& msg = buffer[seq & indexMask];
+    msg.id = i;
+    msg.timestamp = steady_clock::now();
+    msg.data = 123;
+
+    // Publish the message.
+    sequencer.publish(seq);
+  }
+
+  // Publish a sentinel
+  auto seq = co_await sequencer.claim_one(ioSvc);
+  auto& msg = buffer[seq & indexMask];
+  msg.id = -1;
+  sequencer.publish(seq);
+}
+
+task<void> consumer(
+  static_thread_pool& threadPool,
+  const single_producer_sequencer<size_t>& sequencer,
+  sequence_barrier<size_t>& consumerBarrier)
+{
+  size_t nextToRead = 0;
+  while (true)
+  {
+    // Wait until the next message is available
+    // There may be more than one available.
+    const size_t available = co_await sequencer.wait_until_published(nextToRead, threadPool);
+    do {
+      auto& msg = buffer[nextToRead & indexMask];
+      if (msg.id == -1)
+      {
+        consumerBarrier.publish(nextToRead);
+        co_return;
+      }
+
+      processMessage(msg);
+    } while (nextToRead++ != available);
+
+    // Notify the producer that we've finished processing
+    // up to 'nextToRead - 1'.
+    consumerBarrier.publish(available);
+  }
+}
+
+task<void> example(io_service& ioSvc, static_thread_pool& threadPool)
+{
+  sequence_barrier<size_t> barrier;
+  single_producer_sequencer<size_t> sequencer{barrier, bufferSize};
+
+  co_await when_all(
+    producer(tp, sequencer),
+    consumer(tp, sequencer, barrier));
+}
+```
+
+## `multi_producer_sequencer`
+
+The `multi_producer_sequencer` class is a synchronization primitive that coordinates
+access to a ring-buffer for multiple producers and one or more consumers.
+
+For a single-producer variant see the `single_producer_sequencer` class.
+
+Note that the ring-buffer must have a size that is a power-of-two. This is because
+the implementation uses bitmasks instead of integer division/modulo to calculate
+the offset into the buffer. Also, this allows the sequence number to safely wrap
+around the 32-bit/64-bit value.
+
+API Summary:
+```c++
+// <cppcoro/multi_producer_sequencer.hpp>
+namespace cppcoro
+{
+  template<typename SEQUENCE = std::size_t,
+           typename TRAITS = sequence_traits<SEQUENCE>>
+  class multi_producer_sequencer
+  {
+  public:
+    multi_producer_sequencer(
+      const sequence_barrier<SEQUENCE, TRAITS>& consumerBarrier,
+      SEQUENCE initialSequence = TRAITS::initial_sequence);
+
+    std::size_t buffer_size() const noexcept;
+
+    // Consumer interface
+    //
+    // Each consumer keeps track of their own 'lastKnownPublished' value
+    // and must pass this to the methods that query for an updated last-known
+    // published sequence number.
+
+    SEQUENCE last_published_after(SEQUENCE lastKnownPublished) const noexcept;
+
+    template<typename SCHEDULER>
+    Awaitable<SEQUENCE> wait_until_published(
+      SEQUENCE targetSequence,
+      SEQUENCE lastKnownPublished,
+      SCHEDULER& scheduler) const noexcept;
+
+    // Producer interface
+
+    // Query whether any slots available for claiming (approx.)
+    bool any_available() const noexcept;
+
+    template<typename SCHEDULER>
+    Awaitable<SEQUENCE> claim_one(SCHEDULER& scheduler) noexcept;
+
+    template<typename SCHEDULER>
+    Awaitable<sequence_range<SEQUENCE, TRAITS>> claim_up_to(
+      std::size_t count,
+      SCHEDULER& scheduler) noexcept;
+
+    // Mark the specified sequence number as published.
+    void publish(SEQUENCE sequence) noexcept;
+
+    // Mark all sequence numbers in the specified range as published.
+    void publish(const sequence_range<SEQUENCE, TRAITS>& range) noexcept;
+  };
+}
+```
+
+## Cancellation
 
 A `cancellation_token` is a value that can be passed to a function that allows the caller to subsequently communicate a request to cancel the operation to that function.
 
@@ -1140,7 +1398,7 @@ namespace cppcoro
 
     // Return an operation that can be awaited by a coroutine.
     //
-    // 
+    //
     [[nodiscard]]
     schedule_operation schedule() noexcept;
 
@@ -1191,7 +1449,7 @@ cppcoro::task<double> dot_product(static_thread_pool& tp, double a[], double b[]
 }
 ```
 
-## `io_service`
+## `io_service` and `io_work_scope`
 
 The `io_service` class provides an abstraction for processing I/O completion events
 from asynchronous I/O operations.
@@ -1395,7 +1653,7 @@ int main()
 
 ### `io_service` as a scheduler
 
-An `io_sevice` class implements the interfaces for the `Scheduler` and `DelayedScheduler` concepts.
+An `io_service` class implements the interfaces for the `Scheduler` and `DelayedScheduler` concepts.
 
 This allows a coroutine to suspend execution on the current thread and schedule itself for resumption
 on an I/O thread associated with a particular `io_service` object.
@@ -1608,7 +1866,7 @@ namespace cppcoro::net
                            cancellation_token ct) noexcept;
 
     [[nodiscard]]
-    Awaitable<void> disconnect() noexcep0t;
+    Awaitable<void> disconnect() noexcept;
     [[nodiscard]]
     Awaitable<void> disconnect(cancellation_token ct) noexcept;
 
@@ -1786,7 +2044,7 @@ namespace cppcoro::net
 
     constexpr const bytes_t& bytes() const;
 
-    cosntexpr std::uint32_t to_integer() const;
+    constexpr std::uint32_t to_integer() const;
 
     static constexpr ipv4_address loopback();
 
@@ -1973,7 +2231,7 @@ namespace cppcoro::net
 
 ## `sync_wait()`
 
-The `sync_wait()`function can be used to synchronously wait until the specified `awaitable`
+The `sync_wait()` function can be used to synchronously wait until the specified `awaitable`
 completes.
 
 The specified awaitable will be `co_await`ed on current thread inside a newly created coroutine.
@@ -1983,7 +2241,7 @@ the `co_await` expression or rethrow the exception if the `co_await` expression 
 an unhandled exception.
 
 The `sync_wait()` function is mostly useful for starting a top-level task from within `main()`
-and waiting until the task finishes, in practise it is the only way to start the first/top-level
+and waiting until the task finishes, in practice it is the only way to start the first/top-level
 `task`.
 
 API Summary:
@@ -2054,7 +2312,7 @@ The result of `co_await`ing the returned awaitable is a `std::tuple` or `std::ve
 of `when_all_task<RESULT>` objects. These objects allow you to obtain the result (or exception)
 of each input awaitable separately by calling the `when_all_task<RESULT>::result()`
 method of the corresponding output task.
-This allows the caller to concurrently await multiple awaitables and synchronise on
+This allows the caller to concurrently await multiple awaitables and synchronize on
 their completion while still retaining the ability to subsequently inspect the results of
 each of the `co_await` operations for success/failure.
 
@@ -2751,6 +3009,7 @@ You can specify additional command-line arguments to customise the build:
    either debug or optimised (by default it will build both).
 * `lib/build.cake` will just build the cppcoro library and not the tests.
 * `test/build.cake@task_tests.cpp` will just compile a particular source file
+* `test/build.cake@testresult` will build and run the tests
 
 For example:
 ```
@@ -2759,36 +3018,33 @@ $ cake --debug=run release=debug lib/build.cake
 
 ### Customising location of Clang
 
-If your clang compiler is not located at `/usr/bin/clang` then you need to
-modify the `config.cake` file to tell cake where to find clang.
+If your clang compiler is not located at `/usr/bin/clang` then you can specify an
+alternative location using one or more of the following command-line options for `cake`:
 
-Edit the following line in `config.cake`:
-```python
-  # If you have built your own version of Clang, you can modify
-  # this variable to point to the CMAKE_INSTALL_PREFIX for
-  # where you have installed your clang/libcxx build.
-  clangInstallPrefix = '/usr'
+* `--clang-executable=<name>` - Specify the clang executable name to use instead of `clang`.
+  eg. to force use of Clang 8.0 pass `--clang-executable=clang-8`
+* `--clang-executable=<abspath>` - Specify the full path to clang executable.
+  The build system will also look for other executables in the same directory.
+  If this path has the form `<prefix>/bin/<name>` then this will also set the default clang-install-prefix to `<prefix>`.
+* `--clang-install-prefix=<path>` - Specify path where clang has been installed.
+  This will cause the build system to look for clang under `<path>/bin` (unless overridden by `--clang-executable`).
+* `--libcxx-install-prefix=<path>` - Specify path where libc++ has been installed.
+  By default the build system will look for libc++ in the same location as clang.
+  Use this command-line option if it is installed in a different location.
+
+Example: Use a specific version of clang installed in the default location
+```
+$ cake --clang-executable=clang-8
 ```
 
-If you have `libc++` installed in a different location then you can
-customise its location by modifying the following line in `config.cake`.
-```python
-  # Set this to the install-prefix of where libc++ is installed.
-  # You only need to set this if it is not installed at the same
-  # location as clangInstallPrefix.
-  libCxxInstallPrefix = None # '/path/to/install'
+Example: Use the default version of clang from a custom location
+```
+$ cake --clang-install-prefix=/path/to/clang-install
 ```
 
-If the install location has multiple versions of Clang installed and
-the one you want to use is not `<install-prefix>/bin/clang` then you
-can explicitly specify which one to use by modifying the `config.cake`
-file to specify the name of the clang binaries:
-```python
-  compiler = ClangCompiler(
-    configuration=configuration,
-    clangExe=cake.path.join(clangBinPath, 'clang-6.0'),
-    llvmArExe=cake.path.join(clangBinPath, 'llvm-ar-6.0'),
-    binPaths=[clangBinPath])
+Example: Use a specific version of clang, in a custom location, with libc++ from a different location
+```
+$ cake --clang-executable=/path/to/clang-install/bin/clang-8 --libcxx-install-prefix=/path/to/libcxx-install
 ```
 
 ### Using a snapshot build of Clang
@@ -2824,7 +3080,7 @@ See below.
 
 You can also use the bleeding-edge Clang version by building Clang from source yourself.
 
-See instructions here: 
+See instructions here:
 
 To do this you will need to install the following pre-requisites:
 ```

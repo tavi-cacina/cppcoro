@@ -110,7 +110,7 @@ namespace cppcoro
 			}
 
 			std::experimental::coroutine_handle<>
-			await_suspend(std::experimental::coroutine_handle<> producer) noexcept
+			await_suspend([[maybe_unused]] std::experimental::coroutine_handle<> producer) noexcept
 			{
 				return m_consumer;
 			}
@@ -346,7 +346,7 @@ namespace cppcoro
 	}
 
 	template<typename T>
-	class async_generator
+	class [[nodiscard]] async_generator
 	{
 	public:
 
