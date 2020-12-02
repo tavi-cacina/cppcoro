@@ -13,7 +13,7 @@
 #include <cppcoro/cancellation_token.hpp>
 #include <cppcoro/async_scope.hpp>
 
-#include "doctest/doctest.h"
+#include "doctest/cppcoro_doctest.h"
 
 using namespace cppcoro;
 using namespace cppcoro::net;
@@ -206,7 +206,7 @@ TEST_CASE("send/recv TCP/IPv4")
 		}()));
 }
 
-#if !CPPCORO_COMPILER_MSVC || CPPCORO_COMPILER_MSVC > 191627032 || !CPPCORO_CPU_X86
+#if !CPPCORO_COMPILER_MSVC || CPPCORO_COMPILER_MSVC >= 192000000 || !CPPCORO_CPU_X86
 // HACK: Don't compile this function under MSVC x86.
 // It results in an ICE under VS 2017.15 and earlier.
 

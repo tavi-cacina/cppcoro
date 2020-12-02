@@ -1,6 +1,38 @@
+# Fork to help maintaining cppcoro
+
+In the original [cppcoro library](https://github.com/lewissbaker/cppcoro),
+there are some issues which are solved in multiple pull requests. Among those:
+
+* Including 'coroutine' versus including 'experimental/coroutine'
+* Using namespace 'std::' versus using namespace 'std::experimental'
+* Linux support
+* CMake support
+
+This fork aims at creating easy to merge pull requests for each
+topic, where concerns are separated, i.e. each pull request
+cares only about one problem.
+
+The branches are:
+* For adding CMake support it is [add_cmake_support](https://github.com/andreasbuhr/cppcoro/tree/add_cmake_support).
+  It is based on the pull request [110](https://github.com/lewissbaker/cppcoro/pull/110) by mmha.
+  mmha created this pull request on Apr 23, 2019.
+  dutow used this to base his pull request [158](https://github.com/lewissbaker/cppcoro/pull/158) on it.
+  CMake support was again created by Garcia6l20 in pull request [169](https://github.com/lewissbaker/cppcoro/pull/169).
+* For broader QA, support for github actions is developed
+  in [add_github_actions](https://github.com/andreasbuhr/cppcoro/tree/add_github_actions).
+  We aim at testing g++ 10.2, clang and msvc at the moment. Work is in progress.
+* For caring about the coroutine vs. experimental/coroutine include there is the
+  [unify_experimental_includes](https://github.com/andreasbuhr/cppcoro/tree/unify_experimental_includes)
+  branch. There were multiple fixes for this:
+  * [Pull request 125](https://github.com/lewissbaker/cppcoro/pull/125) solved it for filesystem
+  * [Pull request 158](https://github.com/lewissbaker/cppcoro/pull/158) has a nice solution.
+  * [Pull reqeust 169](https://github.com/lewissbaker/cppcoro/pull/169) solved it with preprocessor defines
+
+In the master branch, all efforts are combined. Current build status for master branch: [![Actions Status](https://github.com/andreasbuhr/cppcoro/workflows/CMake/badge.svg)](https://github.com/andreasbuhr/cppcoro/actions).
+The master branch is not intended for merging.
 # CppCoro - A coroutine library for C++
 
-The 'cppcoro' library provides a set of general-purpose primitives for making use of the coroutines TS proposal described in [N4680](http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2017/n4680.pdf).
+The 'cppcoro' library provides a large set of general-purpose primitives for making use of the coroutines TS proposal described in [N4680](http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2017/n4680.pdf).
 
 These include:
 * Coroutine Types
@@ -168,7 +200,7 @@ namespace cppcoro
 }
 ```
 
-You create a `task<T>` object by calling a coroutine function that returns
+You can create a `task<T>` object by calling a coroutine function that returns
 a `task<T>`.
 
 The coroutine must contain a usage of either `co_await` or `co_return`.
@@ -714,7 +746,7 @@ namespace cppcoro
   {
   public:
     bool await_ready() const noexcept;
-    bool await_suspend(std::experimental::coroutine_handle<> awaiter) noexcept;
+    bool await_suspend(cppcoro::coroutine_handle<> awaiter) noexcept;
     void await_resume() const noexcept;
   };
 
@@ -722,7 +754,7 @@ namespace cppcoro
   {
   public:
     bool await_ready() const noexcept;
-    bool await_suspend(std::experimental::coroutine_handle<> awaiter) noexcept;
+    bool await_suspend(cppcoro::coroutine_handle<> awaiter) noexcept;
     [[nodiscard]] async_mutex_lock await_resume() const noexcept;
   };
 
@@ -836,7 +868,7 @@ namespace cppcoro
     async_manual_reset_event_operation(async_manual_reset_event& event) noexcept;
 
     bool await_ready() const noexcept;
-    bool await_suspend(std::experimental::coroutine_handle<> awaiter) noexcept;
+    bool await_suspend(cppcoro::coroutine_handle<> awaiter) noexcept;
     void await_resume() const noexcept;
   };
 }
@@ -904,7 +936,7 @@ namespace cppcoro
     async_auto_reset_event_operation(const async_auto_reset_event_operation& other) noexcept;
 
     bool await_ready() const noexcept;
-    bool await_suspend(std::experimental::coroutine_handle<> awaiter) noexcept;
+    bool await_suspend(cppcoro::coroutine_handle<> awaiter) noexcept;
     void await_resume() const noexcept;
 
   };
@@ -1389,7 +1421,7 @@ namespace cppcoro
       schedule_operation(static_thread_pool* tp) noexcept;
 
       bool await_ready() noexcept;
-      bool await_suspend(std::experimental::coroutine_handle<> h) noexcept;
+      bool await_suspend(cppcoro::coroutine_handle<> h) noexcept;
       bool await_resume() noexcept;
 
     private:
@@ -1546,7 +1578,7 @@ namespace cppcoro
     schedule_operation& operator=(const schedule_operation&) noexcept;
 
     bool await_ready() const noexcept;
-    void await_suspend(std::experimental::coroutine_handle<> awaiter) noexcept;
+    void await_suspend(cppcoro::coroutine_handle<> awaiter) noexcept;
     void await_resume() noexcept;
   };
 
@@ -1560,7 +1592,7 @@ namespace cppcoro
     timed_schedule_operation& operator=(timed_schedule_operation&&) = delete;
 
     bool await_ready() const noexcept;
-    void await_suspend(std::experimental::coroutine_handle<> awaiter);
+    void await_suspend(cppcoro::coroutine_handle<> awaiter);
     void await_resume();
   };
 
@@ -1591,12 +1623,12 @@ Example:
 #include <cppcoro/io_service.hpp>
 #include <cppcoro/read_only_file.hpp>
 
-#include <experimental/filesystem>
+#include <cppcoro/filesystem.hpp>
 #include <memory>
 #include <algorithm>
 #include <iostream>
 
-namespace fs = std::experimental::filesystem;
+namespace fs = cppcoro::filesystem;
 
 cppcoro::task<std::uint64_t> count_lines(cppcoro::io_service& ioService, fs::path path)
 {
@@ -1740,7 +1772,7 @@ namespace cppcoro
     file_read_operation(file_read_operation&& other) noexcept;
 
     bool await_ready() const noexcept;
-    bool await_suspend(std::experimental::coroutine_handle<> awaiter);
+    bool await_suspend(cppcoro::coroutine_handle<> awaiter);
     std::size_t await_resume();
 
   };
@@ -1752,7 +1784,7 @@ namespace cppcoro
     file_write_operation(file_write_operation&& other) noexcept;
 
     bool await_ready() const noexcept;
-    bool await_suspend(std::experimental::coroutine_handle<> awaiter);
+    bool await_suspend(cppcoro::coroutine_handle<> awaiter);
     std::size_t await_resume();
 
   };
@@ -1774,7 +1806,7 @@ namespace cppcoro
     [[nodiscard]]
     static read_only_file open(
       io_service& ioService,
-      const std::experimental::filesystem::path& path,
+      const cppcoro::filesystem::path& path,
       file_share_mode shareMode = file_share_mode::read,
       file_buffering_mode bufferingMode = file_buffering_mode::default_);
 
@@ -1787,7 +1819,7 @@ namespace cppcoro
     [[nodiscard]]
     static write_only_file open(
       io_service& ioService,
-      const std::experimental::filesystem::path& path,
+      const cppcoro::filesystem::path& path,
       file_open_mode openMode = file_open_mode::create_or_open,
       file_share_mode shareMode = file_share_mode::none,
       file_buffering_mode bufferingMode = file_buffering_mode::default_);
@@ -1801,7 +1833,7 @@ namespace cppcoro
     [[nodiscard]]
     static read_write_file open(
       io_service& ioService,
-      const std::experimental::filesystem::path& path,
+      const cppcoro::filesystem::path& path,
       file_open_mode openMode = file_open_mode::create_or_open,
       file_share_mode shareMode = file_share_mode::none,
       file_buffering_mode bufferingMode = file_buffering_mode::default_);
@@ -2794,7 +2826,7 @@ coroutine.
 
 A type that satisfies `Awaiter<T>` must have, for an instance of the type, `awaiter`:
 - `awaiter.await_ready()` -> `bool`
-- `awaiter.await_suspend(std::experimental::coroutine_handle<void>{})` -> `void` or `bool` or `std::experimental::coroutine_handle<P>` for some `P`.
+- `awaiter.await_suspend(cppcoro::coroutine_handle<void>{})` -> `void` or `bool` or `cppcoro::coroutine_handle<P>` for some `P`.
 - `awaiter.await_resume()` -> `T`
 
 Any type that implements the `Awaiter<T>` concept also implements the `Awaitable<T>` concept.
@@ -2859,7 +2891,7 @@ Given a type, `S`, that implements the `DelayedScheduler` and an instance, `s` o
 
 The cppcoro library supports building under Windows with Visual Studio 2017 and Linux with Clang 5.0+.
 
-This library makes use of the [Cake build system](https://github.com/lewissbaker/cake) (no, not the [C# one](http://cakebuild.net/)).
+This library makes use of either the [Cake build system](https://github.com/lewissbaker/cake) (no, not the [C# one](http://cakebuild.net/)) or CMake.
 
 The cake build system is checked out automatically as a git submodule so you don't need to download or install it separately.
 
@@ -2867,9 +2899,11 @@ The cake build system is checked out automatically as a git submodule so you don
 
 This library currently requires Visual Studio 2017 or later and the Windows 10 SDK.
 
-Support for Clang ([#3](https://github.com/lewissbaker/cppcoro/issues/3)) and Linux ([#15](https://github.com/lewissbaker/cppcoro/issues/15)) is planned.
+Support for Linux ([#15](https://github.com/lewissbaker/cppcoro/issues/15)) is planned.
 
 ### Prerequisites
+
+The CMakeLists requires version 3.13 or later.
 
 The Cake build-system is implemented in Python and requires Python 2.7 to be installed.
 
@@ -2902,6 +2936,68 @@ c:\Code\cppcoro> git submodule update --init --recursive
 ```
 
 ### Building from the command-line
+
+#### With CMake
+
+Cppcoro follows the usual CMake workflow with no custom options added. Notable [standard CMake options](https://cmake.org/cmake/help/latest/manual/cmake-variables.7.html):
+
+| Flag                 | Description                  | Default Value          |
+|----------------------|------------------------------|------------------------|
+| BUILD_TESTING        | Build the unit tests         | ON                     |
+| BUILD_SHARED_LIBS    | Build as a shared library    | OFF                    |
+| CMAKE_BUILD_TYPE     | Build as `Debug`/`Release`   | <empty>                |
+| CMAKE_INSTALL_PREFIX | Where to install the library | `/usr/local` (on Unix) |
+
+CMake also respects the [conventional environment variables](https://cmake.org/cmake/help/latest/manual/cmake-env-variables.7.html):
+
+| Environment Variable | Description                   |
+|----------------------|-------------------------------|
+| CXX                  | Path to the C++ compiler      |
+| CXXFLAGS             | C++ compiler flags to prepend |
+| LDFLAGS              | Linker flags to prepend       |
+
+Example:
+
+```bash
+cd <this/repo>
+mkdir build
+cd build
+export CXX=clang++
+export CXXFLAGS="-stdlib=libc++ -march=native"
+export LDFLAGS="-stdlib=libc++ -fuse-ld=lld -Wl,--gdb-index"
+cmake .. [-GNinja] -DCMAKE_INSTALL_PREFIX=$HOME/.local -DBUILD_SHARED_LIBS=ON
+ninja # or make -jN
+ninja test # Run the tests
+ninja install
+```
+
+The CMake build scripts will also install a `cppcoroConfig.cmake` file for consumers to use.
+It will check at the consumer site that coroutines are indeed supported by the system and enable the appropriate compiler flag for Clang or MSVC, respectively.
+Assuming cppcoro has been installed to `$HOME/.local` like in the example above it can be consumed like this:
+
+```cmake
+find_package(cppcoro REQUIRED)
+add_executable(app main.cpp)
+target_link_libraries(app PRIVATE cppcoro::cppcoro)
+```
+
+```bash
+$ cmake . -Dcppcoro_ROOT=$HOME/.local
+# ...
+-- Performing Test _CXX_COROUTINES_SUPPORTS_MS_FLAG
+-- Performing Test _CXX_COROUTINES_SUPPORTS_MS_FLAG - Failed
+-- Performing Test _CXX_COROUTINES_SUPPORTS_CORO_FLAG
+-- Performing Test _CXX_COROUTINES_SUPPORTS_CORO_FLAG - Success
+-- Looking for C++ include coroutine
+-- Looking for C++ include coroutine - not found
+-- Looking for C++ include experimental/coroutine
+-- Looking for C++ include experimental/coroutine - found
+-- Configuring done
+-- Generating done
+# ...
+```
+
+#### With Cake
 
 To build from the command-line just run 'cake.bat' in the workspace root.
 
