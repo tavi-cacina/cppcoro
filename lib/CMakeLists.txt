@@ -169,9 +169,7 @@ target_compile_features(cppcoro PUBLIC cxx_std_20)
 target_compile_definitions(cppcoro PUBLIC ${compile_definition})
 target_compile_options(cppcoro PUBLIC ${compile_options})
 
-set(CMAKE_CXX_STANDARD 20)
-find_package(Coroutines COMPONENTS Experimental Final REQUIRED)
-target_link_libraries(cppcoro PUBLIC std::coroutines ${libraries})
+target_link_libraries(cppcoro PUBLIC ${libraries})
 
 install(TARGETS cppcoro EXPORT cppcoroTargets
 	LIBRARY DESTINATION lib
