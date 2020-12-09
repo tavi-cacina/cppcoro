@@ -154,6 +154,11 @@ if(WIN32)
     endif()
 endif()
 
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  # gcc requires -fcoroutines, as of v10. change/remove this when target_compile_features cxx_std_20 will suffice
+  list(APPEND compile_options -fcoroutines)
+endif()
+
 add_library(cppcoro
 	${includes}
 	${netIncludes}
